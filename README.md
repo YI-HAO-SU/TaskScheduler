@@ -5,25 +5,25 @@ A C++20 multithreaded task scheduler featuring a lock-free work-stealing thread 
 ## Architecture
 
 ```
-                        ┌─────────────────────────────────┐
+                        ┌──────────────────────────────────┐
   submit(f) ──────────► │          Thread Pool             │
                         │                                  │
                         │  Worker 0   Worker 1   Worker N  │
-                        │  ┌──────┐  ┌──────┐  ┌──────┐  │
-                        │  │deque │  │deque │  │deque │  │
-                        │  └──────┘  └──────┘  └──────┘  │
+                        │  ┌──────┐  ┌──────┐  ┌──────┐    │
+                        │  │deque │  │deque │  │deque │    │
+                        │  └──────┘  └──────┘  └──────┘    │
                         │      ▲         │                 │
-                        │      └─ steal ─┘   (Chase-Lev)  │
+                        │      └─ steal ─┘   (Chase-Lev)   │
                         │                                  │
                         │       [global queue]             │
-                        └─────────────────────────────────┘
+                        └──────────────────────────────────┘
 
   TaskGraph:
     add_task("A", fn)          A ──┐
     add_task("B", fn)              ├──► C ──► E
-    add_task("C", fn)          B ──┘         │
-    add_dependency(C, A)                     ▼
-    add_dependency(C, B)       D ──────────► F
+    add_task("C", fn)          B ──┘          │
+    add_dependency(C, A)                      ▼
+    add_dependency(C, B)       D ───────────► F
     graph.run()
 ```
 
