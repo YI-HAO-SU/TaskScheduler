@@ -14,6 +14,7 @@ void TaskGraph::add_dependency(TaskId successor, TaskId predecessor) {
 
 void TaskGraph::check_for_cycles() const {
     // Iterative DFS — color: 0=unvisited, 1=in-stack, 2=done
+    // instead of recursion (avoids stack overflow on large graphs).
     const std::size_t n = nodes_.size();
     std::vector<int> color(n, 0);
 
@@ -68,14 +69,14 @@ void TaskGraph::on_node_complete(std::shared_ptr<Node> node) {
     // Decrement pending_deps for each successor; dispatch those that become ready.
     for (TaskId sid : node->successors) {
         auto& successor = nodes_[sid];
-        int prev = successor->pending_deps.fetch_sub(1, std::memory_order_acq_rel);
-        if (prev == 1)
-            dispatch(successor);
+        int prev = successor->pending_deps.fetch_sub(1, std::memory_order_acq_rel); //fetch_sub(1) returns the value before subtracting
+        if (prev == 1)  // This successor is now ready to run.
+            dispatch(successor);    // Send it to the thread pool.
     }
 
     int prev = remaining_.fetch_sub(1, std::memory_order_acq_rel);
-    if (prev == 1)
-        done_cv_.notify_all();
+    if (prev == 1)  // This was the last remaining task; notify wait().
+        done_cv_.notify_all();  // wake up anyone waiting in wait() that all tasks are done.
 }
 
 void TaskGraph::wait() {

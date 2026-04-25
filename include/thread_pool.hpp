@@ -9,7 +9,7 @@
 #include <random>
 #include <thread>
 #include <vector>
-
+#include <deque>
 #include "task.hpp"
 #include "work_stealing_queue.hpp"
 

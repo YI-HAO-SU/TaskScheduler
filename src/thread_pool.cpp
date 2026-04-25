@@ -15,9 +15,9 @@ ThreadPool::ThreadPool(std::size_t num_threads) {
 }
 
 ThreadPool::~ThreadPool() {
-    stop_.store(true, std::memory_order_relaxed);
-    cv_.notify_all();
-    for (auto& t : workers_) t.join();
+    stop_.store(true, std::memory_order_relaxed);   // Wake up all workers so they can exit.
+    cv_.notify_all();   // Join all worker threads.
+    for (auto& t : workers_) t.join();  // Wait for all workers to finish.
 }
 
 void ThreadPool::enqueue(Task task) {
@@ -74,18 +74,20 @@ void ThreadPool::worker_loop(std::size_t id) {
         if (!task) task = try_steal(id);
 
         if (task) {
-            (*task)();
+            (*task)();      // Execute the task
             int64_t prev = pending_.fetch_sub(1, std::memory_order_acq_rel);
-            if (prev == 1) done_cv_.notify_all();
+            if (prev == 1) done_cv_.notify_all();   // If this was the last pending task, notify wait_all()
             continue;
         }
 
         // Nothing found — sleep until woken
         std::unique_lock lock(global_mutex_);
         cv_.wait(lock, [&] {
-            return stop_.load(std::memory_order_relaxed) ||
-                   !global_queue_.empty() ||
-                   !local_queues_[id]->empty();
+            if (stop_.load(std::memory_order_relaxed)) return true;
+            if (!global_queue_.empty()) return true;
+            for (const auto& q : local_queues_)
+                if (!q->empty()) return true;
+            return false;
         });
 
         if (stop_.load(std::memory_order_relaxed) &&

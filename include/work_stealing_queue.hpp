@@ -31,6 +31,8 @@ public:
     }
 
     ~WorkStealingQueue() {
+        // Only the current (live) buffer is deleted here; any previously grown
+        // buffers that were leaked are reclaimed at process exit.
         delete buffer_.load(std::memory_order_relaxed);
     }
 
@@ -45,9 +47,10 @@ public:
 
         if (b - t >= static_cast<int64_t>(buf->capacity() - 1)) {
             // Grow: allocate 2x buffer and migrate tasks.
-            Buffer* new_buf = buf->grow(b, t);
-            delete buf;
-            buf = new_buf;
+            // The old buffer is intentionally leaked — a thief may still hold a
+            // raw pointer to it and read from it after we publish the new one.
+            // (Chase-Lev requires hazard pointers or epoch GC for safe reclaim.)
+            buf = buf->grow(b, t);
             buffer_.store(buf, std::memory_order_relaxed);
         }
 
@@ -64,25 +67,24 @@ public:
         std::atomic_thread_fence(std::memory_order_seq_cst);
         int64_t t = top_.load(std::memory_order_relaxed);
 
-        if (t <= b) {
-            // Non-empty
-            Task task = buf->load(b);
-            if (t == b) {
-                // Last item — race with thieves
-                if (!top_.compare_exchange_strong(t, t + 1,
-                        std::memory_order_seq_cst, std::memory_order_relaxed)) {
-                    // Lost the race
-                    bottom_.store(b + 1, std::memory_order_relaxed);
-                    return std::nullopt;
-                }
-                bottom_.store(b + 1, std::memory_order_relaxed);
-            }
-            return task;
+        if (t > b) {
+            bottom_.store(b + 1, std::memory_order_relaxed);
+            return std::nullopt;
         }
 
-        // Empty
+        if (t < b) {
+            // Multiple items: owner reads from b, thieves read from top (< b). No conflict.
+            return buf->load(b);
+        }
+
+        // t == b: last item — race with thieves. Win the CAS before touching the slot.
+        if (!top_.compare_exchange_strong(t, t + 1,
+                std::memory_order_seq_cst, std::memory_order_relaxed)) {
+            bottom_.store(b + 1, std::memory_order_relaxed);
+            return std::nullopt;
+        }
         bottom_.store(b + 1, std::memory_order_relaxed);
-        return std::nullopt;
+        return buf->load(b);   // safe: we won, no thief will also read this slot
     }
 
     // Called by thief threads: steal from the top (FIFO).
@@ -91,16 +93,18 @@ public:
         std::atomic_thread_fence(std::memory_order_seq_cst);
         int64_t b = bottom_.load(std::memory_order_acquire);
 
-        if (t >= b) return std::nullopt;   // Empty
+        if (t >= b) return std::nullopt;
 
+        // Load buf before the CAS so we can read from it even if the owner
+        // reallocates (old buffers are leaked, not freed, so the pointer stays valid).
         Buffer* buf = buffer_.load(std::memory_order_consume);
-        Task    task = buf->load(t);
 
         if (!top_.compare_exchange_strong(t, t + 1,
                 std::memory_order_seq_cst, std::memory_order_relaxed)) {
-            return std::nullopt;   // Lost the race
+            return std::nullopt;
         }
-        return task;
+        // We won: slot t is exclusively ours now. Read it after the CAS.
+        return buf->load(t);
     }
 
     bool empty() const {
