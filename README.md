@@ -94,13 +94,24 @@ graph.wait();  // block until D completes
 
 ## Benchmark Results
 
-Measured on Apple M2 (8 threads):
+### Apple M2 (8 threads)
 
 ```
 [throughput]    100,000 tasks    →  430,000 tasks/s
 [latency]       p50 = 4 µs       p99 = 10 µs
 [parallel sum]  16M elements     →  1.23x speedup vs serial
 ```
+
+### Windows 11, x86-64 (12 logical threads / 6 physical cores, MinGW GCC 15.2)
+
+| Benchmark | Parallel | Serial | Speedup | Bottleneck |
+|-----------|----------|--------|---------|------------|
+| Throughput (100K empty tasks) | — | — | ~1.2 µs/task | Scheduler overhead baseline |
+| Latency (submit→result) | — | — | p50 = 13 µs / p99 = 21 µs | OS thread wakeup |
+| Parallel sum (16M integers) | 1.4 ms | 7.1 ms | **5.6x** | DRAM bandwidth saturated |
+| Trig sin×cos (10M values) | 20.4 ms | 113.0 ms | **5.6x** | 6 physical cores + shared UCRT math tables |
+
+> Speedups are below the logical thread count (12) because every workload has a shared-memory bottleneck. A purely register-bound workload (zero shared reads) would approach the physical core ceiling (~6x).
 
 ## Design Notes
 
