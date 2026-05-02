@@ -9,12 +9,21 @@
 // Internally uses std::packaged_task so the caller can wait on the result.
 class Task {
 public:
+    // Public so callers can build a Task with a single allocation by subclassing
+    // TaskBase directly and passing the result to Task(unique_ptr<TaskBase>).
+    struct TaskBase {
+        virtual ~TaskBase() = default;
+        virtual void invoke() = 0;
+    };
+
     Task() = default;
 
     template <typename F>
     explicit Task(F&& f)
         : impl_(std::make_unique<ConcreteTask<std::decay_t<F>>>(std::forward<F>(f)))
     {}
+
+    explicit Task(std::unique_ptr<TaskBase> impl) : impl_(std::move(impl)) {}
 
     Task(Task&&) noexcept = default;
     Task& operator=(Task&&) noexcept = default;
@@ -26,11 +35,6 @@ public:
     bool valid() const { return impl_ != nullptr; }
 
 private:
-    struct TaskBase {
-        virtual ~TaskBase() = default;
-        virtual void invoke() = 0;
-    };
-
     template <typename F>
     struct ConcreteTask : TaskBase {
         F fn;

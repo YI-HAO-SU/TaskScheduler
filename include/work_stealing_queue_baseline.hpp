@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <atomic>
 #include <cassert>
@@ -15,9 +15,9 @@
 // *Thief* threads steal from the top (FIFO).
 //
 // Memory ordering rationale:
-//   - bottom_: only written by owner  → relaxed store/load by owner
-//   - top_:    written by thieves     → CAS with acq_rel / acquire
-//   - Circular buffer resize uses     → seq_cst fence on publish
+//   - bottom_: only written by owner  ??relaxed store/load by owner
+//   - top_:    written by thieves     ??CAS with acq_rel / acquire
+//   - Circular buffer resize uses     ??seq_cst fence on publish
 //
 // Reference: "Dynamic Circular Work-Stealing Deque" (Chase & Lev, 2005)
 class WorkStealingQueue {
@@ -47,7 +47,7 @@ public:
 
         if (b - t >= static_cast<int64_t>(buf->capacity() - 1)) {
             // Grow: allocate 2x buffer and migrate tasks.
-            // The old buffer is intentionally leaked — a thief may still hold a
+            // The old buffer is intentionally leaked ??a thief may still hold a
             // raw pointer to it and read from it after we publish the new one.
             // (Chase-Lev requires hazard pointers or epoch GC for safe reclaim.)
             buf = buf->grow(b, t);
@@ -77,7 +77,7 @@ public:
             return buf->load(b);
         }
 
-        // t == b: last item — race with thieves. Win the CAS before touching the slot.
+        // t == b: last item ??race with thieves. Win the CAS before touching the slot.
         if (!top_.compare_exchange_strong(t, t + 1,
                 std::memory_order_seq_cst, std::memory_order_relaxed)) {
             bottom_.store(b + 1, std::memory_order_relaxed);
@@ -147,7 +147,8 @@ private:
         std::vector<Task>       slots_;
     };
 
-    alignas(64) std::atomic<int64_t>   top_;
-    alignas(64) std::atomic<int64_t>   bottom_;
-    alignas(64) std::atomic<Buffer*>   buffer_;
+    std::atomic<int64_t>   top_;
+    std::atomic<int64_t>   bottom_;
+    std::atomic<Buffer*>   buffer_;
 };
+

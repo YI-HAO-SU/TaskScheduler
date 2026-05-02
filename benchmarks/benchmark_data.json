@@ -1,0 +1,572 @@
+{
+  "hw": 12,
+  "thread_counts": [
+    1,
+    2,
+    4,
+    8,
+    12
+  ],
+  "records": [
+    {
+      "impl": "original",
+      "threads": 1,
+      "bench": "throughput",
+      "metric": "tasks_per_sec",
+      "value": 2586580.0
+    },
+    {
+      "impl": "original",
+      "threads": 1,
+      "bench": "latency",
+      "metric": "avg_ms",
+      "value": 0.0117209
+    },
+    {
+      "impl": "original",
+      "threads": 1,
+      "bench": "latency",
+      "metric": "p50_ms",
+      "value": 0.0108
+    },
+    {
+      "impl": "original",
+      "threads": 1,
+      "bench": "latency",
+      "metric": "p99_ms",
+      "value": 0.0249
+    },
+    {
+      "impl": "original",
+      "threads": 1,
+      "bench": "parallel_sum",
+      "metric": "speedup",
+      "value": 0.900092
+    },
+    {
+      "impl": "original",
+      "threads": 1,
+      "bench": "parallel_sum",
+      "metric": "par_ms",
+      "value": 5.5191
+    },
+    {
+      "impl": "original",
+      "threads": 1,
+      "bench": "trig",
+      "metric": "speedup",
+      "value": 0.990703
+    },
+    {
+      "impl": "original",
+      "threads": 1,
+      "bench": "trig",
+      "metric": "par_ms",
+      "value": 99.0776
+    },
+    {
+      "impl": "fixed",
+      "threads": 1,
+      "bench": "throughput",
+      "metric": "tasks_per_sec",
+      "value": 2388740.0
+    },
+    {
+      "impl": "fixed",
+      "threads": 1,
+      "bench": "latency",
+      "metric": "avg_ms",
+      "value": 0.0117161
+    },
+    {
+      "impl": "fixed",
+      "threads": 1,
+      "bench": "latency",
+      "metric": "p50_ms",
+      "value": 0.0109
+    },
+    {
+      "impl": "fixed",
+      "threads": 1,
+      "bench": "latency",
+      "metric": "p99_ms",
+      "value": 0.0225
+    },
+    {
+      "impl": "fixed",
+      "threads": 1,
+      "bench": "parallel_sum",
+      "metric": "speedup",
+      "value": 0.969969
+    },
+    {
+      "impl": "fixed",
+      "threads": 1,
+      "bench": "parallel_sum",
+      "metric": "par_ms",
+      "value": 5.2545
+    },
+    {
+      "impl": "fixed",
+      "threads": 1,
+      "bench": "trig",
+      "metric": "speedup",
+      "value": 1.00849
+    },
+    {
+      "impl": "fixed",
+      "threads": 1,
+      "bench": "trig",
+      "metric": "par_ms",
+      "value": 97.8525
+    },
+    {
+      "impl": "original",
+      "threads": 2,
+      "bench": "throughput",
+      "metric": "tasks_per_sec",
+      "value": 2104760.0
+    },
+    {
+      "impl": "original",
+      "threads": 2,
+      "bench": "latency",
+      "metric": "avg_ms",
+      "value": 0.011696
+    },
+    {
+      "impl": "original",
+      "threads": 2,
+      "bench": "latency",
+      "metric": "p50_ms",
+      "value": 0.0107
+    },
+    {
+      "impl": "original",
+      "threads": 2,
+      "bench": "latency",
+      "metric": "p99_ms",
+      "value": 0.0571
+    },
+    {
+      "impl": "original",
+      "threads": 2,
+      "bench": "parallel_sum",
+      "metric": "speedup",
+      "value": 1.6888
+    },
+    {
+      "impl": "original",
+      "threads": 2,
+      "bench": "parallel_sum",
+      "metric": "par_ms",
+      "value": 3.3223
+    },
+    {
+      "impl": "original",
+      "threads": 2,
+      "bench": "trig",
+      "metric": "speedup",
+      "value": 1.70465
+    },
+    {
+      "impl": "original",
+      "threads": 2,
+      "bench": "trig",
+      "metric": "par_ms",
+      "value": 59.7874
+    },
+    {
+      "impl": "fixed",
+      "threads": 2,
+      "bench": "throughput",
+      "metric": "tasks_per_sec",
+      "value": 2206030.0
+    },
+    {
+      "impl": "fixed",
+      "threads": 2,
+      "bench": "latency",
+      "metric": "avg_ms",
+      "value": 0.0122216
+    },
+    {
+      "impl": "fixed",
+      "threads": 2,
+      "bench": "latency",
+      "metric": "p50_ms",
+      "value": 0.0107
+    },
+    {
+      "impl": "fixed",
+      "threads": 2,
+      "bench": "latency",
+      "metric": "p99_ms",
+      "value": 0.0259
+    },
+    {
+      "impl": "fixed",
+      "threads": 2,
+      "bench": "parallel_sum",
+      "metric": "speedup",
+      "value": 1.89211
+    },
+    {
+      "impl": "fixed",
+      "threads": 2,
+      "bench": "parallel_sum",
+      "metric": "par_ms",
+      "value": 2.7425
+    },
+    {
+      "impl": "fixed",
+      "threads": 2,
+      "bench": "trig",
+      "metric": "speedup",
+      "value": 1.71543
+    },
+    {
+      "impl": "fixed",
+      "threads": 2,
+      "bench": "trig",
+      "metric": "par_ms",
+      "value": 57.5622
+    },
+    {
+      "impl": "original",
+      "threads": 4,
+      "bench": "throughput",
+      "metric": "tasks_per_sec",
+      "value": 593037.0
+    },
+    {
+      "impl": "original",
+      "threads": 4,
+      "bench": "latency",
+      "metric": "avg_ms",
+      "value": 0.0117746
+    },
+    {
+      "impl": "original",
+      "threads": 4,
+      "bench": "latency",
+      "metric": "p50_ms",
+      "value": 0.0113
+    },
+    {
+      "impl": "original",
+      "threads": 4,
+      "bench": "latency",
+      "metric": "p99_ms",
+      "value": 0.0214
+    },
+    {
+      "impl": "original",
+      "threads": 4,
+      "bench": "parallel_sum",
+      "metric": "speedup",
+      "value": 2.76548
+    },
+    {
+      "impl": "original",
+      "threads": 4,
+      "bench": "parallel_sum",
+      "metric": "par_ms",
+      "value": 1.8847
+    },
+    {
+      "impl": "original",
+      "threads": 4,
+      "bench": "trig",
+      "metric": "speedup",
+      "value": 2.95768
+    },
+    {
+      "impl": "original",
+      "threads": 4,
+      "bench": "trig",
+      "metric": "par_ms",
+      "value": 32.3852
+    },
+    {
+      "impl": "fixed",
+      "threads": 4,
+      "bench": "throughput",
+      "metric": "tasks_per_sec",
+      "value": 1916970.0
+    },
+    {
+      "impl": "fixed",
+      "threads": 4,
+      "bench": "latency",
+      "metric": "avg_ms",
+      "value": 0.0117787
+    },
+    {
+      "impl": "fixed",
+      "threads": 4,
+      "bench": "latency",
+      "metric": "p50_ms",
+      "value": 0.0115
+    },
+    {
+      "impl": "fixed",
+      "threads": 4,
+      "bench": "latency",
+      "metric": "p99_ms",
+      "value": 0.0154
+    },
+    {
+      "impl": "fixed",
+      "threads": 4,
+      "bench": "parallel_sum",
+      "metric": "speedup",
+      "value": 2.97974
+    },
+    {
+      "impl": "fixed",
+      "threads": 4,
+      "bench": "parallel_sum",
+      "metric": "par_ms",
+      "value": 1.8458
+    },
+    {
+      "impl": "fixed",
+      "threads": 4,
+      "bench": "trig",
+      "metric": "speedup",
+      "value": 2.99173
+    },
+    {
+      "impl": "fixed",
+      "threads": 4,
+      "bench": "trig",
+      "metric": "par_ms",
+      "value": 33.0172
+    },
+    {
+      "impl": "original",
+      "threads": 8,
+      "bench": "throughput",
+      "metric": "tasks_per_sec",
+      "value": 217913.0
+    },
+    {
+      "impl": "original",
+      "threads": 8,
+      "bench": "latency",
+      "metric": "avg_ms",
+      "value": 0.0110765
+    },
+    {
+      "impl": "original",
+      "threads": 8,
+      "bench": "latency",
+      "metric": "p50_ms",
+      "value": 0.0105
+    },
+    {
+      "impl": "original",
+      "threads": 8,
+      "bench": "latency",
+      "metric": "p99_ms",
+      "value": 0.0187
+    },
+    {
+      "impl": "original",
+      "threads": 8,
+      "bench": "parallel_sum",
+      "metric": "speedup",
+      "value": 2.78485
+    },
+    {
+      "impl": "original",
+      "threads": 8,
+      "bench": "parallel_sum",
+      "metric": "par_ms",
+      "value": 1.7755
+    },
+    {
+      "impl": "original",
+      "threads": 8,
+      "bench": "trig",
+      "metric": "speedup",
+      "value": 3.3267
+    },
+    {
+      "impl": "original",
+      "threads": 8,
+      "bench": "trig",
+      "metric": "par_ms",
+      "value": 30.1222
+    },
+    {
+      "impl": "fixed",
+      "threads": 8,
+      "bench": "throughput",
+      "metric": "tasks_per_sec",
+      "value": 1364330.0
+    },
+    {
+      "impl": "fixed",
+      "threads": 8,
+      "bench": "latency",
+      "metric": "avg_ms",
+      "value": 0.0119923
+    },
+    {
+      "impl": "fixed",
+      "threads": 8,
+      "bench": "latency",
+      "metric": "p50_ms",
+      "value": 0.0115
+    },
+    {
+      "impl": "fixed",
+      "threads": 8,
+      "bench": "latency",
+      "metric": "p99_ms",
+      "value": 0.0181
+    },
+    {
+      "impl": "fixed",
+      "threads": 8,
+      "bench": "parallel_sum",
+      "metric": "speedup",
+      "value": 2.57582
+    },
+    {
+      "impl": "fixed",
+      "threads": 8,
+      "bench": "parallel_sum",
+      "metric": "par_ms",
+      "value": 2.0343
+    },
+    {
+      "impl": "fixed",
+      "threads": 8,
+      "bench": "trig",
+      "metric": "speedup",
+      "value": 4.28717
+    },
+    {
+      "impl": "fixed",
+      "threads": 8,
+      "bench": "trig",
+      "metric": "par_ms",
+      "value": 23.2422
+    },
+    {
+      "impl": "original",
+      "threads": 12,
+      "bench": "throughput",
+      "metric": "tasks_per_sec",
+      "value": 173358.0
+    },
+    {
+      "impl": "original",
+      "threads": 12,
+      "bench": "latency",
+      "metric": "avg_ms",
+      "value": 0.0116011
+    },
+    {
+      "impl": "original",
+      "threads": 12,
+      "bench": "latency",
+      "metric": "p50_ms",
+      "value": 0.0112
+    },
+    {
+      "impl": "original",
+      "threads": 12,
+      "bench": "latency",
+      "metric": "p99_ms",
+      "value": 0.0197
+    },
+    {
+      "impl": "original",
+      "threads": 12,
+      "bench": "parallel_sum",
+      "metric": "speedup",
+      "value": 3.38492
+    },
+    {
+      "impl": "original",
+      "threads": 12,
+      "bench": "parallel_sum",
+      "metric": "par_ms",
+      "value": 1.4977
+    },
+    {
+      "impl": "original",
+      "threads": 12,
+      "bench": "trig",
+      "metric": "speedup",
+      "value": 4.57332
+    },
+    {
+      "impl": "original",
+      "threads": 12,
+      "bench": "trig",
+      "metric": "par_ms",
+      "value": 22.2849
+    },
+    {
+      "impl": "fixed",
+      "threads": 12,
+      "bench": "throughput",
+      "metric": "tasks_per_sec",
+      "value": 1163130.0
+    },
+    {
+      "impl": "fixed",
+      "threads": 12,
+      "bench": "latency",
+      "metric": "avg_ms",
+      "value": 0.0150027
+    },
+    {
+      "impl": "fixed",
+      "threads": 12,
+      "bench": "latency",
+      "metric": "p50_ms",
+      "value": 0.0127
+    },
+    {
+      "impl": "fixed",
+      "threads": 12,
+      "bench": "latency",
+      "metric": "p99_ms",
+      "value": 0.0764
+    },
+    {
+      "impl": "fixed",
+      "threads": 12,
+      "bench": "parallel_sum",
+      "metric": "speedup",
+      "value": 2.9077
+    },
+    {
+      "impl": "fixed",
+      "threads": 12,
+      "bench": "parallel_sum",
+      "metric": "par_ms",
+      "value": 1.9979
+    },
+    {
+      "impl": "fixed",
+      "threads": 12,
+      "bench": "trig",
+      "metric": "speedup",
+      "value": 3.90347
+    },
+    {
+      "impl": "fixed",
+      "threads": 12,
+      "bench": "trig",
+      "metric": "par_ms",
+      "value": 25.9568
+    }
+  ]
+}

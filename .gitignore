@@ -3,7 +3,17 @@ build/
 *.o
 *.a
 *.so
+*.exe
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 Makefile
+
+# IDE / editor
+.vscode/
+.idea/
+.claude/
+
+# Build logs
+build_*.txt
+bench_out*.txt

@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "thread_pool.hpp"
+#include "thread_pool_baseline.hpp"
 
 using Clock = std::chrono::steady_clock;
 
@@ -107,7 +107,7 @@ void bench_parallel_sum(ThreadPool& pool, const std::string& impl, int nth) {
 
 // ── Benchmark 4: CPU-bound trig (embarrassingly parallel) ────────────────────
 void bench_trig(ThreadPool& pool, const std::string& impl, int nth) {
-    constexpr int N   = 10'000'000;
+    constexpr int N    = 10'000'000;
     const int nthreads = static_cast<int>(pool.thread_count());
     const int chunk    = N / nthreads;
 
@@ -153,7 +153,7 @@ int main(int argc, char* argv[]) {
         if (n > 0) nthreads = static_cast<std::size_t>(n);
     }
 
-    const std::string impl = "fixed";
+    const std::string impl = "original";
     const int         nth  = static_cast<int>(nthreads);
     ThreadPool pool(nthreads);
     std::cout << "=== " << impl << " | threads=" << nth << " ===\n\n" << std::flush;

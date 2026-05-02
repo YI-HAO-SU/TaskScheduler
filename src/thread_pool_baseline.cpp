@@ -1,4 +1,4 @@
-#include "thread_pool.hpp"
+﻿#include "thread_pool_baseline.hpp"
 
 #include <cassert>
 
@@ -23,17 +23,18 @@ ThreadPool::~ThreadPool() {
 void ThreadPool::enqueue(Task task) {
     pending_.fetch_add(1, std::memory_order_relaxed);
 
+    // If called from a worker, push to that worker's local deque.
     if (worker_id_.has_value()) {
         local_queues_[*worker_id_]->push(std::move(task));
-    } else {
-        std::lock_guard lock(global_mutex_);
-        global_queue_.push_back(std::move(task));
-        global_size_.fetch_add(1, std::memory_order_relaxed);
+        cv_.notify_one();
+        return;
     }
 
-    // Increment after the push so the predicate never wakes a worker before
-    // the task is actually visible in the queue.
-    queued_.fetch_add(1, std::memory_order_release);
+    // External submission: push to global queue.
+    {
+        std::lock_guard lock(global_mutex_);
+        global_queue_.push_back(std::move(task));
+    }
     cv_.notify_one();
 }
 
@@ -60,13 +61,12 @@ void ThreadPool::worker_loop(std::size_t id) {
         // 1. Own local deque
         task = local_queues_[id]->pop();
 
-        // 2. Global queue — skip the lock entirely when the queue is known empty (issue #4)
-        if (!task && global_size_.load(std::memory_order_relaxed) > 0) {
+        // 2. Global queue
+        if (!task) {
             std::lock_guard lock(global_mutex_);
             if (!global_queue_.empty()) {
                 task = std::move(global_queue_.front());
                 global_queue_.pop_front();
-                global_size_.fetch_sub(1, std::memory_order_relaxed);
             }
         }
 
@@ -74,25 +74,25 @@ void ThreadPool::worker_loop(std::size_t id) {
         if (!task) task = try_steal(id);
 
         if (task) {
-            // Decrement before execution: task has left all queues.
-            queued_.fetch_sub(1, std::memory_order_relaxed);
-            (*task)();
+            (*task)();      // Execute the task
             int64_t prev = pending_.fetch_sub(1, std::memory_order_acq_rel);
-            if (prev == 1) done_cv_.notify_all();
+            if (prev == 1) done_cv_.notify_all();   // If this was the last pending task, notify wait_all()
             continue;
         }
 
-        // Nothing found — sleep on sleep_mutex_ (not global_mutex_) so we don't
-        // serialize N workers on a single lock during wakeup (issue #3).
-        // Predicate is a single atomic load — no queue scanning.
-        std::unique_lock lock(sleep_mutex_);
+        // Nothing found ??sleep until woken
+        std::unique_lock lock(global_mutex_);
         cv_.wait(lock, [&] {
-            return stop_.load(std::memory_order_relaxed) ||
-                   queued_.load(std::memory_order_acquire) > 0;
+            if (stop_.load(std::memory_order_relaxed)) return true;
+            if (!global_queue_.empty()) return true;
+            for (const auto& q : local_queues_)
+                if (!q->empty()) return true;
+            return false;
         });
 
         if (stop_.load(std::memory_order_relaxed) &&
-            queued_.load(std::memory_order_relaxed) == 0)
+            global_queue_.empty() &&
+            local_queues_[id]->empty())
             break;
     }
 }
@@ -103,3 +103,4 @@ void ThreadPool::wait_all() {
         return pending_.load(std::memory_order_acquire) == 0;
     });
 }
+

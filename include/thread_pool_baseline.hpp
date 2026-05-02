@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <atomic>
 #include <condition_variable>
@@ -11,7 +11,7 @@
 #include <vector>
 #include <deque>
 #include "task.hpp"
-#include "work_stealing_queue.hpp"
+#include "work_stealing_queue_baseline.hpp"
 
 // ThreadPool with per-worker work-stealing queues.
 //
@@ -45,18 +45,11 @@ public:
             return std::invoke(std::move(f), std::move(a)...);
         };
 
-        // Single allocation: FutureTask embeds packaged_task directly so we
-        // avoid the extra shared_ptr + ConcreteTask wrapping (issue #5).
-        struct FutureTask : Task::TaskBase {
-            std::packaged_task<R()> pt;
-            explicit FutureTask(decltype(bound) b) : pt(std::move(b)) {}
-            void invoke() override { pt(); }
-        };
-        auto impl = std::make_unique<FutureTask>(std::move(bound));
-        auto fut  = impl->pt.get_future();
+        auto pt  = std::make_shared<std::packaged_task<R()>>(std::move(bound));
+        auto fut = pt->get_future();
+        Task task([pt = std::move(pt)]() mutable { (*pt)(); });
 
-        // Upcast to TaskBase so Task(unique_ptr<TaskBase>) is chosen over Task(F&&).
-        enqueue(Task(std::unique_ptr<Task::TaskBase>(std::move(impl))));
+        enqueue(std::move(task));
         return fut;
     }
 
@@ -79,24 +72,16 @@ private:
     // Global queue for externally-submitted tasks
     std::mutex                  global_mutex_;
     std::deque<Task>            global_queue_;
-
-    // Separate mutex for sleeping so workers don't hold global_mutex_ during
-    // the cv predicate — prevents serializing all N workers at wakeup (issue #3).
-    std::mutex                  sleep_mutex_;
     std::condition_variable     cv_;
     std::atomic<bool>           stop_{false};
 
-    // items in global_queue_: checked without the lock to skip acquisition when
-    // the global queue is empty (issue #4).
-    alignas(64) std::atomic<int64_t>  global_size_{0};
-    // total items across all queues: O(1) sleep predicate, replaces queue scan (issue #3).
-    alignas(64) std::atomic<int64_t>  queued_{0};
-
     // For wait_all()
-    alignas(64) std::atomic<int64_t>  pending_{0};
+    std::atomic<int64_t>  pending_{0};
     std::mutex                  done_mutex_;
     std::condition_variable     done_cv_;
 
     // Thread-local index: which worker am I?
     static thread_local std::optional<std::size_t> worker_id_;
 };
+
+

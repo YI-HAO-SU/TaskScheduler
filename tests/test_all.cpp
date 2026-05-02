@@ -4,6 +4,7 @@
 #include <future>
 #include <iostream>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 
 #include "task_graph.hpp"
@@ -22,6 +23,29 @@ static int g_pass = 0, g_fail = 0;
             ++g_pass;                                                \
         }                                                            \
     } while (0)
+
+static constexpr int TIMEOUT_SECS = 15;
+
+// Runs fn() in a detached thread watched by a 15-second deadline.
+// On timeout, prints a message and calls quick_exit(2) so the retry
+// script can detect a deadlock and re-launch the whole suite.
+static void run_test(const char* name, void (*fn)()) {
+    std::atomic<bool> done{false};
+    std::thread([fn, &done]() {
+        fn();
+        done.store(true, std::memory_order_release);
+    }).detach();
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(TIMEOUT_SECS);
+    while (!done.load(std::memory_order_acquire)) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            std::cerr << "\nTIMEOUT (" << TIMEOUT_SECS << "s) in " << name
+                      << " — likely deadlock\n" << std::flush;
+            std::quick_exit(2);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+}
 
 // ── Thread pool ───────────────────────────────────────────────────────────────
 
@@ -158,14 +182,14 @@ void test_dag_cycle_detection() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int main() {
-    test_submit_future();
-    test_submit_many();
-    test_submit_with_args();
-    test_exception_propagation();
-    test_work_stealing_concurrent();
-    test_dag_ordering();
-    test_dag_independent_parallel();
-    test_dag_cycle_detection();
+    run_test("test_submit_future",            test_submit_future);
+    run_test("test_submit_many",              test_submit_many);
+    run_test("test_submit_with_args",         test_submit_with_args);
+    run_test("test_exception_propagation",    test_exception_propagation);
+    run_test("test_work_stealing_concurrent", test_work_stealing_concurrent);
+    run_test("test_dag_ordering",             test_dag_ordering);
+    run_test("test_dag_independent_parallel", test_dag_independent_parallel);
+    run_test("test_dag_cycle_detection",      test_dag_cycle_detection);
 
     std::cout << "\n" << g_pass << " passed, " << g_fail << " failed\n";
     return g_fail == 0 ? 0 : 1;

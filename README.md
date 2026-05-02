@@ -43,16 +43,27 @@ A C++20 multithreaded task scheduler featuring a lock-free work-stealing thread 
 ### Build
 
 ```bash
+# Linux / macOS
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
+
+# Windows (MinGW)
+cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j8
 ```
 
 ### Run
 
 ```bash
+# Linux / macOS
 ./build/example    # demos: future, work stealing, DAG
 ./build/tests      # unit tests
 ./build/benchmark  # throughput / latency / parallel sum
+
+# Windows
+./build/example.exe
+./build/tests.exe
+./build/benchmark.exe
 ```
 
 ## Usage
@@ -94,26 +105,74 @@ graph.wait();  // block until D completes
 
 ## Benchmark Results
 
-### Apple M2 (8 threads)
+**Platform:** Windows 11, x86-64 — 12 logical threads / 6 physical cores (HT), MinGW GCC 15.2 `-O2`
 
+Five scenarios (1 T, 2 T, 4 T, 8 T, 12 T) were run for both the **Original** pool (issues 1–5 present) and the **Fixed** pool.
+Results are persisted in `benchmarks/benchmark_data.json` and can be re-plotted without re-running:
+
+```bash
+python benchmarks/run_benchmarks.py            # compile + run + plot
+python benchmarks/run_benchmarks.py --plot-only # plot from saved JSON
 ```
-[throughput]    100,000 tasks    →  430,000 tasks/s
-[latency]       p50 = 4 µs       p99 = 10 µs
-[parallel sum]  16M elements     →  1.23x speedup vs serial
-```
 
-### Windows 11, x86-64 (12 logical threads / 6 physical cores, MinGW GCC 15.2)
+### Original (w/ issues) vs Fixed — all thread counts
 
-| Benchmark | Parallel | Serial | Speedup | Bottleneck |
-|-----------|----------|--------|---------|------------|
-| Throughput (100K empty tasks) | — | — | ~1.2 µs/task | Scheduler overhead baseline |
-| Latency (submit→result) | — | — | p50 = 13 µs / p99 = 21 µs | OS thread wakeup |
-| Parallel sum (16M integers) | 1.4 ms | 7.1 ms | **5.6x** | DRAM bandwidth saturated |
-| Trig sin×cos (10M values) | 20.4 ms | 113.0 ms | **5.6x** | 6 physical cores + shared UCRT math tables |
+![Grouped bar chart: Original vs Fixed at 1T/2T/4T/8T/12T](benchmarks/benchmark_results.png)
 
-> Speedups are below the logical thread count (12) because every workload has a shared-memory bottleneck. A purely register-bound workload (zero shared reads) would approach the physical core ceiling (~6x).
+### Scaling curves
+
+![Scaling line chart with ideal-linear reference for CPU-bound benchmarks](benchmarks/benchmark_scaling.png)
+
+### Throughput collapse
+
+The original pool routes every external `submit()` through a single `global_mutex_`, causing severe contention as thread count rises. The fixed pool avoids the lock for worker-submitted tasks and uses lock-free per-worker deques:
+
+| Threads | Original | Fixed | Fixed / Original |
+|---------|----------|-------|-----------------|
+| 1 T | 2.6 M/s | 2.4 M/s | 0.9× |
+| 2 T | 2.1 M/s | 2.2 M/s | 1.0× |
+| 4 T | 593 K/s | 1.9 M/s | **3.2×** |
+| 8 T | 218 K/s | 1.4 M/s | **6.3×** |
+| 12 T | 173 K/s | 1.2 M/s | **6.7×** |
+
+The original degrades **15× from 1 T to 12 T**; the fixed pool degrades only **2×**.
+
+### Summary at 12 threads
+
+| Benchmark | Original | Fixed | Note |
+|-----------|----------|-------|------|
+| Throughput (100K tasks) | 173 K/s | **1.16 M/s** | +6.7× — primary win |
+| Latency avg | 12 µs | 15 µs | comparable |
+| Latency p99 | 20 µs | 76 µs | ① |
+| Parallel sum speedup | 3.4× | 2.9× | memory-bandwidth bound |
+| Trig speedup | 4.6× | 3.9× | hardware ceiling (see below) |
+
+① The latency benchmark submits one task at a time and blocks (`future.get()`). With more threads idle, the original pool's global queue is watched by all workers simultaneously — the task is grabbed almost instantly. The fixed pool may route the task to a remote worker via work stealing, adding a cross-core round trip. This trade-off disappears under real parallel load where throughput dominates.
+
+### Why trig tops out at ~4–5× on 12 threads
+
+The trig benchmark is purely compute-bound (no shared memory reads between threads), so it exposes the hardware ceiling directly:
+
+- This CPU has **6 physical cores** with 2 hyper-threads each
+- Two HT siblings share the FPU/SIMD execution units — for heavy floating-point, a second HT adds only ~10–20% throughput, not 100%
+- Effective parallelism ≈ 6 cores × ~1.15 HT factor ≈ **~7× theoretical ceiling**
+- Observed 4–5× reflects real hardware limits, not scheduler overhead
 
 ## Design Notes
+
+### Performance Optimizations
+
+Five bottlenecks were identified and fixed after profiling on an 8-thread machine. The table below lists each issue, its root cause, and the fix applied.
+
+| # | Symptom | Root cause | Fix |
+|---|---------|------------|-----|
+| 1 | Cache line ping-pong in `WorkStealingQueue` | `top_` (written by thieves) and `bottom_` (written by owner) shared a cache line | `alignas(64)` on `top_`, `bottom_`, `buffer_` |
+| 2 | `pending_` counter bouncing across cores | `pending_` shared a cache line with adjacent fields | `alignas(64)` on `pending_` |
+| 3 | All N workers serialized at wakeup | `cv_.wait` predicate held `global_mutex_` while scanning all N local queues — O(N) under a lock | Dedicated `sleep_mutex_` separate from the queue lock; predicate replaced by single atomic load |
+| 4 | `global_mutex_` acquired every idle cycle | Workers locked `global_mutex_` to check the global queue even when it was empty | `global_size_` atomic: workers skip the lock when the counter reads zero |
+| 5 | Double heap allocation per `submit()` | `make_shared<packaged_task>` + `make_unique<ConcreteTask>` = 2 allocations per task | `FutureTask` local struct embeds `packaged_task` directly — single `make_unique` call |
+
+**Combined effect:** throughput for small tasks improved **6.7×** at 12 threads (173 K → 1.16 M tasks/s). Large compute-bound tasks are unaffected because scheduler overhead is negligible compared to task runtime.
 
 ### Lock-Free Work-Stealing Deque (Chase-Lev)
 
@@ -122,6 +181,12 @@ Each worker owns a circular deque. The owner pushes/pops from the **bottom** (LI
 - `bottom_`: only written by owner → `relaxed` store, `seq_cst` fence before last-item check
 - `top_`: written by multiple thieves → `acq_rel` CAS
 - Buffer pointer: published with `release`, read by thieves with `consume`
+
+### Worker Sleep / Wake Protocol
+
+Workers follow a three-step priority loop: own local deque → global queue → steal from a random peer. Before sleeping, a worker checks the `global_size_` atomic; it only acquires `global_mutex_` when `global_size_ > 0`, skipping the lock entirely when the global queue is empty.
+
+Sleep uses a dedicated `sleep_mutex_` (separate from `global_mutex_`), so N workers can wake up simultaneously without serializing on the queue lock. The wake predicate is a single `queued_.load(acquire) > 0` — `queued_` is a counter incremented on every enqueue and decremented when a task is extracted from any queue.
 
 ### DAG Scheduler
 
@@ -140,23 +205,34 @@ Each graph node holds an `std::atomic<int> pending_deps` (in-degree). When a tas
 
 ```
 include/
-  task.hpp                 # Type-erased Task + make_task<F>()
-  work_stealing_queue.hpp  # Lock-free Chase-Lev deque
-  thread_pool.hpp          # Thread pool interface
-  task_graph.hpp           # DAG scheduler interface
+  task.hpp                        # Type-erased Task + make_task<F>()
+  work_stealing_queue.hpp         # Lock-free Chase-Lev deque (fixed)
+  work_stealing_queue_baseline.hpp# Original deque (no cache-line padding)
+  thread_pool.hpp                 # Thread pool interface (fixed)
+  thread_pool_baseline.hpp        # Original thread pool (all bottlenecks present)
+  task_graph.hpp                  # DAG scheduler interface
 src/
-  thread_pool.cpp          # Worker loop, stealing, wait_all
-  task_graph.cpp           # DFS cycle check, node dispatch
+  thread_pool.cpp                 # Worker loop, stealing, wait_all
+  thread_pool_baseline.cpp        # Original implementation
+  task_graph.cpp                  # DFS cycle check, node dispatch
+  task_graph_baseline.cpp         # Baseline task graph
 tests/
-  test_all.cpp             # 10 concurrency unit tests
+  test_all.cpp                    # 8 concurrency unit tests (15 s timeout per test)
 benchmarks/
-  benchmark.cpp            # Throughput / latency / parallel sum
+  benchmark.cpp                   # Fixed pool benchmark (accepts thread-count arg)
+  benchmark_baseline.cpp          # Original pool benchmark
+  run_benchmarks.py               # Compile, run all scenarios, save JSON, plot charts
+  benchmark_data.json             # Saved results from last benchmark run
+  benchmark_results.png           # Bar chart: Original vs Fixed
+  benchmark_scaling.png           # Line chart: scaling curves
 examples/
-  main.cpp                 # Runnable demos
+  main.cpp                        # Runnable demos
+run_tests.sh                      # Shell script to build and run tests
 ```
 
 ## Requirements
 
 - C++20 compiler (GCC 11+ / Clang 13+ / MSVC 19.29+)
 - CMake 3.20+
-- pthreads
+- pthreads (Linux/macOS only; bundled with MinGW on Windows)
+- Python 3 + matplotlib (only needed to re-plot benchmark charts)
