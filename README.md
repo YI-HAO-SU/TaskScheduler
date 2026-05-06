@@ -135,7 +135,9 @@ The original pool routes every external `submit()` through a single `global_mute
 | 8 T | 218 K/s | 1.4 M/s | **6.3×** |
 | 12 T | 173 K/s | 1.2 M/s | **6.7×** |
 
-The original degrades **15× from 1 T to 12 T**; the fixed pool degrades only **2×**.
+The original degrades **15× from 1 T to 12 T**; the fixed pool degrades only **2×** ①.
+
+① Even the fixed pool loses throughput as thread count rises for this benchmark. The tasks are nanosecond-level trivial work, so idle workers continuously polling queues and attempting steals generate cache coherency traffic that outweighs any parallelism benefit. This is expected behaviour — thread pools are designed for tasks coarse-grained enough to amortise scheduling overhead. Compute-bound benchmarks (trig, parallel sum) show real multi-thread speedup because workers stay busy and idle-polling noise is negligible.
 
 ### Summary at 12 threads
 
@@ -143,11 +145,11 @@ The original degrades **15× from 1 T to 12 T**; the fixed pool degrades only **
 |-----------|----------|-------|------|
 | Throughput (100K tasks) | 173 K/s | **1.16 M/s** | +6.7× — primary win |
 | Latency avg | 12 µs | 15 µs | comparable |
-| Latency p99 | 20 µs | 76 µs | ① |
+| Latency p99 | 20 µs | 76 µs | ② |
 | Parallel sum speedup | 3.4× | 2.9× | memory-bandwidth bound |
 | Trig speedup | 4.6× | 3.9× | hardware ceiling (see below) |
 
-① The latency benchmark submits one task at a time and blocks (`future.get()`). With more threads idle, the original pool's global queue is watched by all workers simultaneously — the task is grabbed almost instantly. The fixed pool may route the task to a remote worker via work stealing, adding a cross-core round trip. This trade-off disappears under real parallel load where throughput dominates.
+② The latency benchmark submits one task at a time and blocks (`future.get()`). With more threads idle, the original pool's global queue is watched by all workers simultaneously — the task is grabbed almost instantly. The fixed pool may route the task to a remote worker via work stealing, adding a cross-core round trip. This trade-off disappears under real parallel load where throughput dominates.
 
 ### Why trig tops out at ~4–5× on 12 threads
 
