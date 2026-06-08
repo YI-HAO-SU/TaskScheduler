@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <deque>
 #include <functional>
 #include <future>
 #include <mutex>
@@ -9,7 +10,6 @@
 #include <random>
 #include <thread>
 #include <vector>
-#include <deque>
 #include "task.hpp"
 #include "work_stealing_queue.hpp"
 
@@ -17,14 +17,14 @@
 //
 // Submit strategy:
 //   1. If called from a worker thread, push directly into that worker's
-//      local deque (avoids contention on the global queue).
-//   2. Otherwise, push into the global queue.
+//      local deque.
+//   2. Otherwise, round-robin across all local deques (no global queue,
+//      no mutex on the submit path).
 //
 // Worker loop:
 //   1. Pop from own local deque.
-//   2. Pop from global queue.
-//   3. Steal from a random other worker's deque.
-//   4. Sleep on condition_variable if nothing found.
+//   2. Steal from a random other worker's deque.
+//   3. Sleep on condition_variable if nothing found.
 class ThreadPool {
 public:
     explicit ThreadPool(std::size_t num_threads = std::thread::hardware_concurrency());
@@ -73,29 +73,31 @@ private:
     void enqueue(Task task);
     std::optional<Task> try_steal(std::size_t thief_id);
 
-    std::vector<std::thread>                    workers_;
-    std::vector<std::unique_ptr<WorkStealingQueue>> local_queues_;
+    std::vector<std::thread>                         workers_;
+    std::vector<std::unique_ptr<WorkStealingQueue>>  local_queues_;
 
-    // Global queue for externally-submitted tasks
-    std::mutex                  global_mutex_;
-    std::deque<Task>            global_queue_;
+    // Per-worker inbox for external submits.
+    // Chase-Lev push() is owner-only; external threads must go through a
+    // separate inbox so they never race with the owner's push/pop on bottom_.
+    struct Inbox {
+        alignas(64) std::mutex   mtx;
+        std::deque<Task>         tasks;
+    };
+    std::vector<std::unique_ptr<Inbox>>  inboxes_;
 
-    // Separate mutex for sleeping so workers don't hold global_mutex_ during
-    // the cv predicate — prevents serializing all N workers at wakeup (issue #3).
-    std::mutex                  sleep_mutex_;
-    std::condition_variable     cv_;
-    std::atomic<bool>           stop_{false};
+    std::mutex               sleep_mutex_;
+    std::condition_variable  cv_;
+    std::atomic<bool>        stop_{false};
 
-    // items in global_queue_: checked without the lock to skip acquisition when
-    // the global queue is empty (issue #4).
-    alignas(64) std::atomic<int64_t>  global_size_{0};
-    // total items across all queues: O(1) sleep predicate, replaces queue scan (issue #3).
-    alignas(64) std::atomic<int64_t>  queued_{0};
+    // Round-robin index for external submits: wraps around worker count.
+    alignas(64) std::atomic<std::size_t> round_robin_idx_{0};
+    // Total items across all queues: O(1) sleep predicate.
+    alignas(64) std::atomic<int64_t>     queued_{0};
 
     // For wait_all()
     alignas(64) std::atomic<int64_t>  pending_{0};
-    std::mutex                  done_mutex_;
-    std::condition_variable     done_cv_;
+    std::mutex               done_mutex_;
+    std::condition_variable  done_cv_;
 
     // Thread-local index: which worker am I?
     static thread_local std::optional<std::size_t> worker_id_;

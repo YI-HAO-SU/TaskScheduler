@@ -7,8 +7,10 @@ thread_local std::optional<std::size_t> ThreadPool::worker_id_ = std::nullopt;
 ThreadPool::ThreadPool(std::size_t num_threads) {
     assert(num_threads > 0);
 
-    for (std::size_t i = 0; i < num_threads; ++i)
+    for (std::size_t i = 0; i < num_threads; ++i) {
         local_queues_.push_back(std::make_unique<WorkStealingQueue>());
+        inboxes_.push_back(std::make_unique<Inbox>());
+    }
 
     for (std::size_t i = 0; i < num_threads; ++i)
         workers_.emplace_back(&ThreadPool::worker_loop, this, i);
@@ -24,17 +26,22 @@ void ThreadPool::enqueue(Task task) {
     pending_.fetch_add(1, std::memory_order_relaxed);
 
     if (worker_id_.has_value()) {
+        // Worker submits directly to its own Chase-Lev deque (owner-only push).
         local_queues_[*worker_id_]->push(std::move(task));
+        queued_.fetch_add(1, std::memory_order_release);
+        cv_.notify_one();
     } else {
-        std::lock_guard lock(global_mutex_);
-        global_queue_.push_back(std::move(task));
-        global_size_.fetch_add(1, std::memory_order_relaxed);
+        // External submit: round-robin into per-worker inbox.
+        // notify_all() ensures the target worker (not an arbitrary one) wakes up,
+        // since only that worker drains its own inbox.
+        std::size_t idx = round_robin_idx_.fetch_add(1, std::memory_order_relaxed) % workers_.size();
+        {
+            std::lock_guard lk(inboxes_[idx]->mtx);
+            inboxes_[idx]->tasks.push_back(std::move(task));
+        }
+        queued_.fetch_add(1, std::memory_order_release);
+        cv_.notify_all();
     }
-
-    // Increment after the push so the predicate never wakes a worker before
-    // the task is actually visible in the queue.
-    queued_.fetch_add(1, std::memory_order_release);
-    cv_.notify_one();
 }
 
 std::optional<Task> ThreadPool::try_steal(std::size_t thief_id) {
@@ -57,20 +64,19 @@ void ThreadPool::worker_loop(std::size_t id) {
     while (true) {
         std::optional<Task> task;
 
-        // 1. Own local deque
+        // 1. Own Chase-Lev deque (worker-produced tasks, LIFO)
         task = local_queues_[id]->pop();
 
-        // 2. Global queue — skip the lock entirely when the queue is known empty (issue #4)
-        if (!task && global_size_.load(std::memory_order_relaxed) > 0) {
-            std::lock_guard lock(global_mutex_);
-            if (!global_queue_.empty()) {
-                task = std::move(global_queue_.front());
-                global_queue_.pop_front();
-                global_size_.fetch_sub(1, std::memory_order_relaxed);
+        // 2. Own inbox (externally submitted tasks, round-robin)
+        if (!task) {
+            std::lock_guard lk(inboxes_[id]->mtx);
+            if (!inboxes_[id]->tasks.empty()) {
+                task = std::move(inboxes_[id]->tasks.front());
+                inboxes_[id]->tasks.pop_front();
             }
         }
 
-        // 3. Steal from another worker
+        // 3. Steal from another worker's Chase-Lev deque
         if (!task) task = try_steal(id);
 
         if (task) {
